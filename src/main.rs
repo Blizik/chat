@@ -8,10 +8,7 @@ use mio::*;
 use mio::net::{TcpListener, TcpStream};
 
 fn main() {
-    // Setup some tokens to allow us to identify which event is
-    // for which socket.
     const SERVER: Token = Token(0);
-    const CLIENT: Token = Token(1);
 
     let addr = "127.0.0.1:13265".parse().unwrap();
 
@@ -27,6 +24,7 @@ fn main() {
     // Create storage for events
     let mut events = Events::with_capacity(1024);
 
+    // Create storage for incoming clients
     let mut streams = Vec::new();
 
     loop {
@@ -37,14 +35,29 @@ fn main() {
                 SERVER => {
                     let (stream, _) = server.accept().unwrap();
 
-                    poll.register(&stream, Token(streams.len() + 1), Ready::readable(), PollOpt::edge()).unwrap();
+                    // Should be given a better token
+                    let client_token = Token(streams.len() + 1);
+
+                    poll.register(&stream, client_token, Ready::readable(), PollOpt::edge()).unwrap();
 
                     streams.push(stream);
                 }
                 Token(n) => {
+                    #[cfg(all(unix, not(target_os = "fuchsia")))]
+                    {
+                        use mio::unix::{UnixReady};
+
+                        // Client dropped
+                        // https://carllerche.github.io/mio/mio/unix/struct.UnixReady.html#method.hup
+                        if UnixReady::from(event.readiness()).is_hup() {
+                            println!("Client {} dropped", n);
+                        }
+                    }
+                    
                     let mut stream = &streams[n - 1];
 
-                    let mut buf = [0; 5];
+                    // Very tiny, just to make sure the loop below works
+                    let mut buf = [0; 8];
                     let mut out = Vec::new();
 
                     loop {
@@ -52,6 +65,10 @@ fn main() {
                             Ok(n) if n != 0 => out.extend_from_slice(&buf[..n]),
                             _ => break,
                         }
+                    }
+                    
+                    if out.len() == 0 {
+                        println!("Client {} dropped", n);
                     }
 
                     let out = std::str::from_utf8(&out).unwrap().trim();
