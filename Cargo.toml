@@ -1,0 +1,9 @@
+[package]
+name = "chat"
+version = "0.1.0"
+authors = ["Blizik <portalblizik@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+mio = "0.6"
+termion = "1"
