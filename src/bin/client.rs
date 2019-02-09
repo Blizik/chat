@@ -15,17 +15,14 @@ use chat::{Handler, Message, MessageData, Peer, TrackerMessage};
 fn main() {
     let mut client = Client::connect("127.0.0.1:1234".parse().unwrap()).unwrap();
 
-    client
-        .send(
-            Token(0),
-            MessageData::PeerMessage {
-                name: "Blizik".to_string(),
-                msg: "Hello world!".to_string(),
-            },
-        )
-        .unwrap();
+    let stdin = io::stdin();
 
-    loop {}
+    for line in stdin.lock().lines() {
+        client.send(Token(0), MessageData::PeerMessage {
+            name: "Blizik".to_string(),
+            msg: line.unwrap()
+        }).unwrap();
+    }
 }
 
 // The state of the user's running program

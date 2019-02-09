@@ -127,6 +127,8 @@ impl Tracker {
         let entry = self.connections.vacant_entry();
         let token = Token(entry.key());
 
+        println!("New peer: {}", token.0);
+
         let peer = Peer {
             name: None,
             token,
