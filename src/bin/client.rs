@@ -16,6 +16,8 @@ fn main() {
         name: "Blizik".to_string(),
         msg: "Hello world!".to_string()
     }).unwrap();
+
+    loop {}
 }
 
 // The state of the user's running program

@@ -37,13 +37,14 @@ pub struct Message {
     pub data: MessageData,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MessageData {
+    Disconnect,
     TrackerMessage,
     PeerMessage {
         name: String,
         msg: String,
-    }
+    },
 }
 
 #[derive(Debug)]

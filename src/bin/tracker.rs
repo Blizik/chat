@@ -13,7 +13,7 @@ fn main() {
     let mut tracker = Tracker::bind("0.0.0.0:1234".parse().unwrap()).unwrap();
 
     if let Err(e) = tracker.start() {
-        println!("Error: {}", e);
+        println!("Error: {:?}", e);
     }
 }
 
@@ -41,10 +41,12 @@ impl Handler for Tracker {
 
         loop {
             match stream.read(&mut buf) {
-                Ok(n) => {
-                    if n == 0 { break } // Should drop client instead
-                    data.extend_from_slice(&buf[..n])
-                }
+                Ok(0) => return Ok(
+                    Message {
+                        from,
+                        data: MessageData::Disconnect,
+                    }),
+                Ok(n) => data.extend_from_slice(&buf[..n]),
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
                 Err(e) => return Err(e)
             }
@@ -96,7 +98,6 @@ impl Tracker {
                     // This will be the only necessary branch for the tracker.
                     // Tracker only connects peers, does nothing with messages.
                     TRACKER => {
-                        println!("New peer");
                         let token = self.accept()?;
                         let stream = &self.connections[token.0].stream;
 
@@ -104,8 +105,10 @@ impl Tracker {
                     }
                     Token(n) => {
                         let msg = self.recv(Token(n))?;
-
-                        println!("{}: {:?}", n, msg.data);
+                        match msg.data { 
+                            MessageData::Disconnect => self.drop(Token(n))?,
+                            data => println!("{}: {:?}", n, data),
+                        }
                     }
                 }
             }
@@ -129,6 +132,22 @@ impl Tracker {
         entry.insert(peer);
 
         Ok(token)
+    }
+
+    fn drop(&mut self, peer: Token) -> io::Result<()> {
+        println!("Dropping {}", peer.0);
+
+        if self.connections.contains(peer.0) {
+            self.connections.remove(peer.0);
+        } else {
+            let e = io::Error::new(
+                io::ErrorKind::NotFound,
+                "The peer with that token could not be found"
+            );
+            return Err(e);
+        }
+
+        Ok(())
     }
 }
 
