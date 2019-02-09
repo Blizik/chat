@@ -2,20 +2,28 @@
 
 use std::io::{self, prelude::*};
 
-use mio::{*, net::{TcpListener, TcpStream}};
+use mio::{
+    net::{TcpListener, TcpStream},
+    *,
+};
 use slab::Slab;
 
 extern crate chat;
 
-use chat::{Handler, Peer, Message, MessageData, TrackerMessage};
+use chat::{Handler, Message, MessageData, Peer, TrackerMessage};
 
 fn main() {
     let mut client = Client::connect("127.0.0.1:1234".parse().unwrap()).unwrap();
 
-    client.send(Token(0), MessageData::PeerMessage {
-        name: "Blizik".to_string(),
-        msg: "Hello world!".to_string()
-    }).unwrap();
+    client
+        .send(
+            Token(0),
+            MessageData::PeerMessage {
+                name: "Blizik".to_string(),
+                msg: "Hello world!".to_string(),
+            },
+        )
+        .unwrap();
 
     loop {}
 }
@@ -27,7 +35,6 @@ struct Client {
     listener: TcpListener,
     running: bool,
 }
-
 
 impl Handler for Client {
     fn send(&mut self, to: Token, data: MessageData) -> io::Result<usize> {
@@ -47,7 +54,7 @@ impl Handler for Client {
             match stream.read(&mut buf) {
                 Ok(n) => data.extend_from_slice(&buf[..n]),
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
-                Err(e) => return Err(e)
+                Err(e) => return Err(e),
             }
         }
 
@@ -75,7 +82,7 @@ impl Client {
         Ok(Self {
             connections,
             listener,
-            running: false
+            running: false,
         })
     }
 }

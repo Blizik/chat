@@ -2,12 +2,15 @@
 
 use std::io::{self, prelude::*};
 
-use mio::{*, net::{TcpListener, TcpStream}};
+use mio::{
+    net::{TcpListener, TcpStream},
+    *,
+};
 use slab::Slab;
 
 extern crate chat;
 
-use chat::{Handler, Peer, Message, MessageData, TrackerMessage};
+use chat::{Handler, Message, MessageData, Peer, TrackerMessage};
 
 fn main() {
     let mut tracker = Tracker::bind("0.0.0.0:1234".parse().unwrap()).unwrap();
@@ -41,14 +44,15 @@ impl Handler for Tracker {
 
         loop {
             match stream.read(&mut buf) {
-                Ok(0) => return Ok(
-                    Message {
+                Ok(0) => {
+                    return Ok(Message {
                         from,
                         data: MessageData::Disconnect,
-                    }),
+                    });
+                }
                 Ok(n) => data.extend_from_slice(&buf[..n]),
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
-                Err(e) => return Err(e)
+                Err(e) => return Err(e),
             }
         }
 
@@ -68,7 +72,7 @@ impl Tracker {
         Ok(Self {
             connections,
             listener,
-            running: false
+            running: false,
         })
     }
 
@@ -105,7 +109,7 @@ impl Tracker {
                     }
                     Token(n) => {
                         let msg = self.recv(Token(n))?;
-                        match msg.data { 
+                        match msg.data {
                             MessageData::Disconnect => self.drop(Token(n))?,
                             data => println!("{}: {:?}", n, data),
                         }
@@ -126,7 +130,7 @@ impl Tracker {
         let peer = Peer {
             name: None,
             token,
-            stream
+            stream,
         };
 
         entry.insert(peer);
@@ -142,7 +146,7 @@ impl Tracker {
         } else {
             let e = io::Error::new(
                 io::ErrorKind::NotFound,
-                "The peer with that token could not be found"
+                "The peer with that token could not be found",
             );
             return Err(e);
         }
@@ -154,7 +158,5 @@ impl Tracker {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn tracker() {
-        
-    }
+    fn tracker() {}
 }

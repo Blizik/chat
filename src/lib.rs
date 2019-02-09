@@ -1,15 +1,18 @@
 #![allow(dead_code, unused_imports)]
 
 pub extern crate mio;
-pub extern crate slab;
 pub extern crate serde;
 pub extern crate serde_json;
+pub extern crate slab;
 
 use std::io::{self, prelude::*};
 
-use mio::{*, net::{TcpListener, TcpStream}};
-use slab::Slab;
+use mio::{
+    net::{TcpListener, TcpStream},
+    *,
+};
 use serde::{Deserialize, Serialize};
+use slab::Slab;
 
 // Handle incoming and outgoing connections
 pub trait Handler {
@@ -41,15 +44,12 @@ pub struct Message {
 pub enum MessageData {
     Disconnect,
     TrackerMessage,
-    PeerMessage {
-        name: String,
-        msg: String,
-    },
+    PeerMessage { name: String, msg: String },
 }
 
 #[derive(Debug)]
 pub enum TrackerMessage {
     Connection(),
     Broadcast(String),
-    Shutdown
+    Shutdown,
 }
