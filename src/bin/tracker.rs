@@ -88,11 +88,11 @@ impl Tracker {
         // peer connections to have tokens matching their indices in the slab.
 
         // Also std::usize::MAX is an invalid token?
-        const TRACKER: Token = Token(std::usize::MAX - 1);
+        const LISTENER: Token = Token(std::usize::MAX - 1);
 
         // This will eventually only be Ready::writable(), tracker only needs
         // to tell new clients where the peers are.
-        poll.register(&self.listener, TRACKER, Ready::readable(), PollOpt::edge())?;
+        poll.register(&self.listener, LISTENER, Ready::readable(), PollOpt::edge())?;
 
         while self.running {
             poll.poll(&mut events, None)?;
@@ -101,17 +101,17 @@ impl Tracker {
                 match event.token() {
                     // This will be the only necessary branch for the tracker.
                     // Tracker only connects peers, does nothing with messages.
-                    TRACKER => {
+                    LISTENER => {
                         let token = self.accept()?;
                         let stream = &self.connections[token.0].stream;
 
                         poll.register(stream, token, Ready::readable(), PollOpt::edge())?;
                     }
-                    Token(n) => {
-                        let msg = self.recv(Token(n))?;
+                    n => {
+                        let msg = self.recv(n)?;
                         match msg.data {
-                            MessageData::Disconnect => self.drop(Token(n))?,
-                            data => println!("{}: {:?}", n, data),
+                            MessageData::Disconnect => self.drop(n)?,
+                            data => println!("{}: {:?}", n.0, data),
                         }
                     }
                 }
@@ -122,12 +122,17 @@ impl Tracker {
     }
 
     fn accept(&mut self) -> io::Result<Token> {
-        let (stream, _) = self.listener.accept()?;
+        let (mut stream, _) = self.listener.accept()?;
+
+        // Tell client about peers
+        let data = MessageData::Tracker(TrackerMessage::Connect(self.peer_list()));
+        let json_data = serde_json::to_string(&data)?;
+        stream.write(&json_data.as_bytes())?;
 
         let entry = self.connections.vacant_entry();
         let token = Token(entry.key());
 
-        println!("New peer: {}", token.0);
+        println!("Peer {} connected from {}", token.0, stream.peer_addr().unwrap());
 
         let peer = Peer {
             name: None,
@@ -154,6 +159,16 @@ impl Tracker {
         }
 
         Ok(())
+    }
+
+    fn peer_list(&self) -> Vec<std::net::SocketAddr> {
+        let mut v = Vec::with_capacity(self.connections.len());
+
+        for (_, peer) in self.connections.iter() {
+            v.push(peer.stream.peer_addr().unwrap())
+        }
+
+        v
     }
 }
 

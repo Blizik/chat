@@ -43,13 +43,26 @@ pub struct Message {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MessageData {
     Disconnect,
-    TrackerMessage,
-    PeerMessage { name: String, msg: String },
+    Tracker(TrackerMessage),
+    Peer { name: String, msg: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TrackerMessage {
-    Connection(),
+    // Notify new clients of where their peers are
+    Connect(Vec<std::net::SocketAddr>),
     Broadcast(String),
-    Shutdown,
+}
+
+impl Peer {
+    pub fn send(&mut self, data: &MessageData) -> io::Result<usize> {
+        let stream = &mut self.stream;
+        let json_data = serde_json::to_string(&data)?;
+
+        stream.write(&json_data.as_bytes())
+    }
+
+    pub fn recv(&mut self) -> io::Result<Message> {
+        unimplemented!();
+    }
 }

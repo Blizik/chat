@@ -9,19 +9,15 @@ use mio::{
 use slab::Slab;
 
 extern crate chat;
-
 use chat::{Handler, Message, MessageData, Peer, TrackerMessage};
+
+const TRACKER: Token = Token(0);
 
 fn main() {
     let mut client = Client::connect("127.0.0.1:1234".parse().unwrap()).unwrap();
 
-    let stdin = io::stdin();
-
-    for line in stdin.lock().lines() {
-        client.send(Token(0), MessageData::PeerMessage {
-            name: "Blizik".to_string(),
-            msg: line.unwrap()
-        }).unwrap();
+    if let Err(e) = client.start() {
+        println!("Error: {:?}", e);
     }
 }
 
@@ -49,6 +45,12 @@ impl Handler for Client {
 
         loop {
             match stream.read(&mut buf) {
+                Ok(0) => {
+                    return Ok(Message {
+                        from,
+                        data: MessageData::Disconnect,
+                    });
+                }
                 Ok(n) => data.extend_from_slice(&buf[..n]),
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
                 Err(e) => return Err(e),
@@ -67,7 +69,7 @@ impl Client {
     fn connect(addr: std::net::SocketAddr) -> io::Result<Self> {
         let tracker = Peer {
             name: None,
-            token: Token(0),
+            token: TRACKER,
             stream: TcpStream::connect(&addr)?,
         };
 
@@ -81,5 +83,71 @@ impl Client {
             listener,
             running: false,
         })
+    }
+
+    fn start(&mut self) -> io::Result<()> {
+        self.running = true;
+
+        let poll = Poll::new()?;
+        let mut events = Events::with_capacity(1024);
+
+        // Register to accept peers
+        const LISTENER: Token = Token(std::usize::MAX - 1);
+        poll.register(&self.listener, LISTENER, Ready::readable(), PollOpt::edge())?;
+
+        // Register to recieve tracker messages
+        poll.register(&self.connections[0].stream, TRACKER, Ready::readable(), PollOpt::edge())?;
+
+        while self.running {
+            poll.poll(&mut events, None)?;
+
+            for event in &events {
+                match event.token() {
+                    LISTENER => {
+                        let token = self.accept()?;
+                        let stream = &self.connections[token.0].stream;
+
+                        poll.register(stream, token, Ready::readable() | Ready::writable(), PollOpt::edge())?;
+                    }
+                    TRACKER => {
+                        let msg = self.recv(TRACKER)?;
+                        match msg.data {
+                            MessageData::Tracker(msg) => {
+                                use TrackerMessage::*;
+                                match msg {
+                                    Connect(peers) => println!("{:?}", peers),
+                                    Broadcast(msg) => println!("{}", msg),
+                                }
+                            }
+                            MessageData::Disconnect => {
+                                println!("Connection to tracker lost, attempting to reestablish...");
+                                panic!("lol not actually");
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    n => {
+                        let msg = self.recv(n)?;
+                        match msg.data {
+                            MessageData::Disconnect => self.drop(n)?,
+                            MessageData::Peer { name, msg } => {
+                                println!("{}: {}", name, msg);
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn accept(&mut self) -> io::Result<Token> {
+        unimplemented!()
+    }
+
+    fn drop(&mut self, _peer: Token) -> io::Result<()> {
+        unimplemented!()
     }
 }
