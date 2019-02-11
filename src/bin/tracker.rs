@@ -82,12 +82,7 @@ impl Tracker {
         let poll = Poll::new()?;
         let mut events = Events::with_capacity(1024);
 
-        // ~~ Problem ~~
-        // I want this to be a nice unique token number, I'd like to use -1 for
-        // "self" but Token is a wrapper around usize. I mostly just want the
-        // peer connections to have tokens matching their indices in the slab.
-
-        // Also std::usize::MAX is an invalid token?
+        // std::usize::MAX is an invalid token?
         const LISTENER: Token = Token(std::usize::MAX - 1);
 
         // This will eventually only be Ready::writable(), tracker only needs
@@ -111,7 +106,7 @@ impl Tracker {
                         let msg = self.recv(n)?;
                         match msg.data {
                             MessageData::Disconnect => self.drop(n)?,
-                            data => println!("{}: {:?}", n.0, data),
+                            data => println!("This should never happen. {}: {:?}", n.0, data),
                         }
                     }
                 }

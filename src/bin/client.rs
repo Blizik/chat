@@ -103,15 +103,20 @@ impl Client {
 
             for event in &events {
                 match event.token() {
-                    LISTENER => {
+                    LISTENER => { // New peer!
                         let token = self.accept()?;
                         let stream = &self.connections[token.0].stream;
 
-                        poll.register(stream, token, Ready::readable() | Ready::writable(), PollOpt::edge())?;
+                        poll.register(stream, token, Ready::readable(), PollOpt::edge())?;
                     }
-                    TRACKER => {
+                    TRACKER => { // Tracker is telling us something
                         let msg = self.recv(TRACKER)?;
                         match msg.data {
+                            MessageData::Disconnect => {
+                                println!("Connection to tracker lost, attempting to reestablish...");
+                                println!("lol not actually");
+                                std::process::exit(1);
+                            }
                             MessageData::Tracker(msg) => {
                                 use TrackerMessage::*;
                                 match msg {
@@ -119,14 +124,14 @@ impl Client {
                                     Broadcast(msg) => println!("{}", msg),
                                 }
                             }
-                            MessageData::Disconnect => {
-                                println!("Connection to tracker lost, attempting to reestablish...");
-                                panic!("lol not actually");
+                            _ => {
+                                println!("Tracker sent peer data.");
+                                println!("(This should never happen)");
+                                println!("{:?}", msg.data);
                             }
-                            _ => unreachable!(),
                         }
                     }
-                    n => {
+                    n => { // A peer sent a message
                         let msg = self.recv(n)?;
                         match msg.data {
                             MessageData::Disconnect => self.drop(n)?,
