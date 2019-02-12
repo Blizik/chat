@@ -32,7 +32,6 @@ impl Handler for Tracker {
     fn send(&mut self, to: Token, data: MessageData) -> io::Result<usize> {
         let stream = &mut self.connections[to.0].stream;
         let json_data = serde_json::to_string(&data)?;
-
         stream.write(&json_data.as_bytes())
     }
 

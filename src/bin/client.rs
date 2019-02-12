@@ -24,6 +24,7 @@ fn main() {
 // The state of the user's running program
 #[derive(Debug)]
 struct Client {
+    tracker: TcpStream,
     connections: Slab<Peer>,
     listener: TcpListener,
     running: bool,
@@ -33,12 +34,14 @@ impl Handler for Client {
     fn send(&mut self, to: Token, data: MessageData) -> io::Result<usize> {
         let stream = &mut self.connections[to.0].stream;
         let json_data = serde_json::to_string(&data)?;
-
         stream.write(&json_data.as_bytes())
     }
 
     fn recv(&mut self, from: Token) -> io::Result<Message> {
-        let stream = &mut self.connections[from.0].stream;
+        let stream = match from {
+            TRACKER => &mut self.tracker,
+            Token(n) => &mut self.connections[n].stream
+        };
 
         let mut data = Vec::new();
         let mut buf = [0; 8];
@@ -67,18 +70,18 @@ impl Handler for Client {
 impl Client {
     // Connect to a tracker
     fn connect(addr: std::net::SocketAddr) -> io::Result<Self> {
-        let tracker = Peer {
-            name: None,
-            token: TRACKER,
-            stream: TcpStream::connect(&addr)?,
-        };
+        let tracker = TcpStream::connect(&addr)?;
 
-        let listener = TcpListener::bind(&"0.0.0.0:8000".parse().unwrap())?;
+        // Thanks to https://github.com/aatxe for this beautiful thing
+        let listener = (8000..65536).find_map(|port| {
+            let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+            TcpListener::bind(&addr).ok()
+        }).expect("unable to find an open port.");
 
-        let mut connections = Slab::with_capacity(128);
-        connections.insert(tracker);
+        let connections = Slab::with_capacity(128);
 
         Ok(Self {
+            tracker,
             connections,
             listener,
             running: false,
@@ -96,7 +99,7 @@ impl Client {
         poll.register(&self.listener, LISTENER, Ready::readable(), PollOpt::edge())?;
 
         // Register to recieve tracker messages
-        poll.register(&self.connections[0].stream, TRACKER, Ready::readable(), PollOpt::edge())?;
+        poll.register(&self.tracker, TRACKER, Ready::readable(), PollOpt::edge())?;
 
         while self.running {
             poll.poll(&mut events, None)?;
@@ -125,7 +128,7 @@ impl Client {
                                 }
                             }
                             _ => {
-                                println!("Tracker sent peer data.");
+                                println!("Tracker sent peer-formatted data.");
                                 println!("(This should never happen)");
                                 println!("{:?}", msg.data);
                             }
